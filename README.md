@@ -169,12 +169,12 @@ time.sleep(0.1)  # Reduce for faster processing (may trigger rate limits)
 - Gmail with 2FA: Use an App Password, not your regular password
 - Check if IMAP is enabled in your email settings
 
-### No codes found
+### "No codes found"
 - Verify the subject keyword matches your emails
 - Check the date range includes your target emails
 - Ensure emails are in the specified folder
 
-### Connection timeout
+### "Connection timeout"
 - The script reconnects every 50 messages automatically
 - Check your internet connection
 
