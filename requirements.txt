@@ -1,0 +1,13 @@
+# Email Code Extractor Requirements
+# No external dependencies required - uses Python standard library only
+# Python 3.6+ required
+
+# The following are built-in modules used:
+# - email
+# - re
+# - imaplib
+# - os
+# - csv
+# - time
+# - datetime
+# - getpass
