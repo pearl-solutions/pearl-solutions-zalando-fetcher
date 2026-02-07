@@ -86,7 +86,7 @@ def get_user_inputs():
     password = getpass("Password (input hidden): ").strip()
     while not password:
         print("Password cannot be empty.")
-        password = getpass("Password (input hidden): ").strip()
+        password = getpass("Password (input hidden): ").strip().replace(" ", "")
 
     # Start date
     while True:
