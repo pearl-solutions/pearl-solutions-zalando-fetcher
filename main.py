@@ -7,7 +7,6 @@ import time
 from email.header import decode_header
 from email.utils import parsedate_to_datetime
 from datetime import datetime
-from getpass import getpass
 
 
 def save_code_to_csv(email_addr, code, email_date, filename="codes.csv"):
@@ -83,10 +82,10 @@ def get_user_inputs():
         print("Invalid email format. Please try again.")
 
     # Password
-    password = getpass("Password (input hidden): ").strip()
+    password = input("Password (input hidden): ").strip()
     while not password:
         print("Password cannot be empty.")
-        password = getpass("Password (input hidden): ").strip().replace(" ", "")
+        password = input("Password (input hidden): ").strip().replace(" ", "")
 
     # Start date
     while True:
