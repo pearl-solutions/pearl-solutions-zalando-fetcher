@@ -145,40 +145,40 @@ def connect_imap(imap_server, email_addr, password):
 def extract_codes(config):
     """
     Main function to extract verification codes from emails
-
+ 
     Args:
         config (dict): Configuration dictionary from user inputs
     """
     date_imap = config['start_date'].strftime("%d-%b-%Y")
-
+ 
     print("\nConnecting to email server...")
-
+ 
     mail = connect_imap(config['imap_server'], config['email'], config['password'])
-
+ 
     # Select the specified mailbox
     print(f"Selecting mailbox: {config['mailbox']}")
     mail.select(config['mailbox'])
-
+ 
     # Search for emails
     search_query = f'(SINCE {date_imap} SUBJECT "{config["subject_keyword"]}")'
     status, search_data = mail.search(None, search_query)
-
+ 
     if status != "OK":
         print("Error in search query.")
         return
-
+ 
     message_ids = search_data[0].split()
     print(f"{len(message_ids)} messages found with '{config['subject_keyword']}' in subject.\n")
-
+ 
     if len(message_ids) == 0:
         print("No messages to process. Exiting.")
         mail.close()
         mail.logout()
         return
-
+ 
     processed = 0
     codes_found = 0
-
+ 
     for num in message_ids:
         try:
             # Reconnect every 50 messages to avoid timeout
@@ -192,13 +192,13 @@ def extract_codes(config):
                 time.sleep(1)
                 mail = connect_imap(config['imap_server'], config['email'], config['password'])
                 mail.select(config['mailbox'])
-
+ 
             status, msg_data = mail.fetch(num, '(RFC822)')
-
+ 
             if status != "OK":
                 print(f"Error fetching message {num}")
                 continue
-
+ 
         except Exception as e:
             print(f"Error fetching message {num}: {e}")
             # Attempt to reconnect
@@ -215,18 +215,18 @@ def extract_codes(config):
             except Exception as e2:
                 print(f"Reconnection failed: {e2}")
                 continue
-
+ 
         # Parse email
         raw_email = msg_data[0][1]
         msg = email.message_from_bytes(raw_email)
-
+ 
         # Decode subject
         subject, encoding = decode_header(msg.get("Subject"))[0]
         if isinstance(subject, bytes):
             subject = subject.decode(encoding or "utf-8")
-
+ 
         to_ = msg.get("To")
-
+ 
         # Get email received date
         email_date_str = msg.get("Date")
         try:
@@ -236,25 +236,25 @@ def extract_codes(config):
         except:
             # Fallback to current time if parsing fails
             formatted_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
+ 
         # Progress update every 10 messages
         if processed % 10 == 0:
             print(f"[{processed}] Processing: {subject[:50]}...")
-
+ 
         # Extract recipient email
         emails_found = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', to_)
         if not emails_found:
             processed += 1
             continue
         recipient_email = emails_found[0]
-
+ 
         # Extract email body
         body = ""
         if msg.is_multipart():
             for part in msg.walk():
                 content_type = part.get_content_type()
                 content_disposition = str(part.get("Content-Disposition"))
-
+ 
                 if content_type == "text/plain" and "attachment" not in content_disposition:
                     charset = part.get_content_charset() or "utf-8"
                     try:
@@ -268,28 +268,62 @@ def extract_codes(config):
                 body = msg.get_payload(decode=True).decode(charset, errors="replace")
             except:
                 pass
-
-        # Search for verification code pattern
+ 
+        # Search for verification code pattern - MULTIPLE STRATEGIES
         if body:
-            # Pattern: <font...>10-character alphanumeric code</font>
-            match = re.search(r"<font[^>]*>([A-Z0-9]{10})</font>", body)
-
+            code = None
+            
+            # Strategy 1: Chercher après "Votre code" (pour emails Zalando)
+            match = re.search(r"Votre code\*?\*?\s*:\s*([A-Z0-9]{10})", body, re.IGNORECASE)
             if match:
                 code = match.group(1)
+                print(f"[Strategy 1 - Votre code] Code found: {code}")
+            
+            # Strategy 2: Chercher dans une balise <td> (HTML formaté)
+            if not code:
+                match = re.search(r"<td[^>]*>([A-Z0-9]{10})</td>", body)
+                if match:
+                    code = match.group(1)
+                    print(f"[Strategy 2 - TD tag] Code found: {code}")
+            
+            # Strategy 3: Chercher dans n'importe quelle balise HTML
+            if not code:
+                match = re.search(r"<[^>]*>([A-Z0-9]{10})<", body)
+                if match:
+                    code = match.group(1)
+                    print(f"[Strategy 3 - Any HTML tag] Code found: {code}")
+            
+            # Strategy 4: Chercher simplement une séquence de 10 caractères alphanumériques (majuscules)
+            if not code:
+                match = re.search(r"(?:code|verification|verify|code\s*verification)[\s:]*([A-Z0-9]{10})", body, re.IGNORECASE)
+                if match:
+                    code = match.group(1)
+                    print(f"[Strategy 4 - With keyword] Code found: {code}")
+            
+            # Strategy 5: Chercher simplement 10 caractères alphanumériques (fallback)
+            if not code:
+                match = re.search(r"([A-Z0-9]{10})", body)
+                if match:
+                    code = match.group(1)
+                    print(f"[Strategy 5 - Direct pattern] Code found: {code}")
+ 
+            if code:
                 save_code_to_csv(recipient_email, code, formatted_date)
                 codes_found += 1
-                print(f"Code found: {code} for {recipient_email}")
-
+                print(f"✓ Code saved: {code} for {recipient_email}")
+            else:
+                print(f"✗ No code found in message from {recipient_email}")
+ 
         processed += 1
         time.sleep(0.1)  # Rate limiting
-
+ 
     # Close connection
     try:
         mail.close()
         mail.logout()
     except:
         pass
-
+ 
     print(f"\n{'=' * 40}")
     print(f"Processing complete!")
     print(f"{processed} messages processed.")
